@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:17
+    container_name: gym_postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: gym_user
+      POSTGRES_PASSWORD: gym_password
+      POSTGRES_DB: gym_db
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    container_name: gym_fastapi
+    restart: unless-stopped
+
+    depends_on:
+      - db
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      APP_NAME: Gym Management System
+      ENVIRONMENT: development
+      SECRET_KEY: change-this-later-to-a-long-random-secret
+
+      POSTGRES_USER: gym_user
+      POSTGRES_PASSWORD: gym_password
+      POSTGRES_DB: gym_db
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+
+
+volumes:
+  postgres_data:
