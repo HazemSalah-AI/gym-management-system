@@ -44,7 +44,9 @@ def main(argv: list[str] | None = None) -> int:
             print("Initial Admin created successfully.")
             return 0
     except ValidationError:
-        print("Invalid input: username must be 3-50 lowercase letters/digits/._-, email valid, password 12-1024 characters.")
+        print(
+            "Invalid input: username must be 3-50 lowercase letters/digits/._-, email valid, password 12-1024 characters."
+        )
     except BootstrapConflict as exc:
         print(str(exc))
     except (EOFError, KeyboardInterrupt, getpass.GetPassWarning):

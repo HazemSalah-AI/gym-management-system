@@ -29,6 +29,7 @@ class BootstrapRepository:
         return self.db.scalar(select(User.id).join(User.role).where(Role.name == "Admin").limit(1)) is not None
 
     def identity_exists(self, username: str, email: str) -> bool:
-        return self.db.scalar(select(User.id).where(
-            or_(User.username == username, User.email == email)
-        ).limit(1)) is not None
+        return (
+            self.db.scalar(select(User.id).where(or_(User.username == username, User.email == email)).limit(1))
+            is not None
+        )

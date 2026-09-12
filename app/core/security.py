@@ -3,9 +3,10 @@ import hashlib
 from pwdlib import PasswordHash
 from pwdlib.exceptions import UnknownHashError
 
+from app.core.config import settings
 
 password_hasher = PasswordHash.recommended()
-SESSION_MAX_AGE = 8 * 60 * 60
+SESSION_MAX_AGE = settings.session_max_age
 MIN_PASSWORD_LENGTH = 12
 MAX_PASSWORD_LENGTH = 1024
 

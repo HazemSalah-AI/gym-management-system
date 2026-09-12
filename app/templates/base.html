@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title or 'Gym Admin' }} · Gym Admin</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+{% if user %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">GYM<span>OPS</span></div>
+    <nav aria-label="Main navigation">
+      {% set links = [
+        ('/dashboard','Dashboard','dashboard.read'),('/members','Members','members.read'),
+        ('/memberships','Memberships','memberships.read'),('/payments','Payments','payments.read'),
+        ('/attendance','Attendance','attendance.read'),('/trainers','Trainers','trainers.read'),
+        ('/workouts','Workouts','workouts.read'),('/reports','Reports','reports.read'),
+        ('/users','Users','users.manage'),('/settings','Settings','settings.manage') ] %}
+      {% for url,label,permission in links %}{% if has_permission(user, permission) %}
+      <a href="{{ url }}" class="{% if request.url.path == url or (url != '/dashboard' and request.url.path.startswith(url)) %}active{% endif %}">{{ label }}</a>
+      {% endif %}{% endfor %}
+    </nav>
+    <div class="sidebar-footer">
+      <small>{{ user.username }} · {{ user.role.name }}</small>
+      <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-light w-100 mt-2">Sign out</button></form>
+    </div>
+  </aside>
+  <main class="workspace">
+    <header class="page-head"><div><p class="eyebrow">Gym Management</p><h1>{{ title }}</h1></div>{% block actions %}{% endblock %}</header>
+    {% if message %}<div class="alert alert-success" role="status">{{ message }}</div>{% endif %}
+    {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% else %}{% block public_content %}{% endblock %}{% endif %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+</body></html>

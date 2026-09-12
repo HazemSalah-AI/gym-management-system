@@ -39,8 +39,11 @@ def test_login_me_cookie_and_safe_serialization(client, login, db, users):
 @pytest.mark.parametrize("username", ["admin", "unknown"])
 def test_wrong_credentials_share_public_error(client, users, username):
     token = client.get("/auth/csrf").json()["csrf_token"]
-    response = client.post("/auth/login", json={"username": username, "password": secrets.token_urlsafe(24)},
-                           headers={"X-CSRF-Token": token})
+    response = client.post(
+        "/auth/login",
+        json={"username": username, "password": secrets.token_urlsafe(24)},
+        headers={"X-CSRF-Token": token},
+    )
     assert response.status_code == 401
     assert response.json() == {"detail": "Invalid username or password"}
     assert client.get("/auth/me").status_code == 401
@@ -66,8 +69,11 @@ def test_no_authentication_is_401(client, method, path):
 @pytest.mark.parametrize("token", [None, "incorrect", "é" * 43])
 def test_login_csrf_rejected(client, users, credential, token):
     client.get("/auth/csrf")
-    response = client.post("/auth/login", json={"username": "admin", "password": credential[0]},
-                           headers={} if token is None else {"X-CSRF-Token": token.encode("utf-8")})
+    response = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": credential[0]},
+        headers={} if token is None else {"X-CSRF-Token": token.encode("utf-8")},
+    )
     assert response.status_code == 403
 
 
@@ -75,8 +81,12 @@ def test_csrf_from_other_session_is_rejected(client, credential):
     token = client.get("/auth/csrf").json()["csrf_token"]
     client.cookies.clear()
     client.get("/auth/csrf")
-    assert client.post("/auth/login", json={"username": "admin", "password": credential[0]},
-                       headers={"X-CSRF-Token": token}).status_code == 403
+    assert (
+        client.post(
+            "/auth/login", json={"username": "admin", "password": credential[0]}, headers={"X-CSRF-Token": token}
+        ).status_code
+        == 403
+    )
 
 
 def test_csrf_rotates_at_login(client, login):
@@ -155,8 +165,11 @@ def test_tampered_cookie_is_401(client, login):
 def test_validation_does_not_echo_password_or_body(client):
     secret = secrets.token_urlsafe(24)
     token = client.get("/auth/csrf").json()["csrf_token"]
-    for payload in ({"password": secret}, {"username": "admin", "password": {"secret": secret}},
-                    {"username": "admin", "password": secret, "extra": secret}):
+    for payload in (
+        {"password": secret},
+        {"username": "admin", "password": {"secret": secret}},
+        {"username": "admin", "password": secret, "extra": secret},
+    ):
         response = client.post("/auth/login", json=payload, headers={"X-CSRF-Token": token})
         assert response.status_code == 422
         assert secret not in response.text
@@ -164,10 +177,13 @@ def test_validation_does_not_echo_password_or_body(client):
 
 def test_login_failure_rolls_back_session_and_timestamp(db, users, credential, monkeypatch):
     from app.services.auth import AuthService
+
     user = db.get(User, users["Admin"])
     assert user.last_login_at is None
+
     def fail_commit():
         raise RuntimeError("Simulated database failure")
+
     monkeypatch.setattr(db, "commit", fail_commit)
     with pytest.raises(RuntimeError):
         AuthService(db).login("admin", credential[0])

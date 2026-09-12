@@ -1,4 +1,5 @@
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -15,6 +16,10 @@ class Settings(BaseSettings):
     postgres_db: str
     postgres_host: str = "localhost"
     postgres_port: int = 5432
+    gym_timezone: str = "Africa/Cairo"
+    session_max_age: int = 28_800
+    cookie_secure: bool | None = None
+    allowed_hosts: str = "localhost,127.0.0.1,testserver"
 
     @property
     def database_url(self) -> URL:
@@ -29,14 +34,37 @@ class Settings(BaseSettings):
 
     @property
     def session_https_only(self) -> bool:
-        return self.environment == "production"
+        return self.cookie_secure if self.cookie_secure is not None else self.environment == "production"
+
+    @property
+    def allowed_host_list(self) -> list[str]:
+        hosts = [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]
+        return hosts or ["localhost"]
+
+    @field_validator("gym_timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("GYM_TIMEZONE must be a valid IANA timezone") from exc
+        return value
+
+    @field_validator("session_max_age")
+    @classmethod
+    def validate_session_age(cls, value: int) -> int:
+        if not 300 <= value <= 86_400:
+            raise ValueError("SESSION_MAX_AGE must be between 300 and 86400 seconds")
+        return value
 
     @field_validator("secret_key")
     @classmethod
     def validate_secret(cls, value: SecretStr) -> SecretStr:
         raw = value.get_secret_value()
-        if len(raw) < 32 or len(set(raw)) < 8 or any(
-            word in raw.lower() for word in ("change-this", "your-secret", "replace-me")
+        if (
+            len(raw) < 32
+            or len(set(raw)) < 8
+            or any(word in raw.lower() for word in ("change-this", "your-secret", "replace-me"))
         ):
             raise ValueError("SECRET_KEY must be a generated random secret of at least 32 characters")
         return value

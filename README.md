@@ -1,213 +1,162 @@
 # Gym Management System
 
-Single-gym FastAPI MVP using synchronous SQLAlchemy, Alembic and PostgreSQL.
+A production-oriented, single-gym management MVP built with FastAPI, SQLAlchemy,
+PostgreSQL, Alembic, Jinja2, Bootstrap and vanilla JavaScript. It provides a
+responsive browser UI and permission-protected JSON endpoints for daily gym
+operations.
 
-Phase 5 implementation is present. See `PHASE5_REPORT.md` for the task checklist,
-verified results and remaining Docker/PostgreSQL/real-admin checks. No frontend,
-public signup, online payments or AI were added.
+## Features
 
-## Install and configure
+- Revocable cookie sessions, Argon2id password hashing, CSRF protection and database-backed RBAC.
+- Member creation, editing, searching, filtering, pagination and reversible deactivation.
+- Configurable calendar-month membership plans, subscription history, renewal without lost paid days and price snapshots.
+- Auditable cash/card/bank-transfer payment recording, partial payments and derived balances with overpayment protection.
+- Egypt-local attendance dates, active-subscription checks and one check-in per member per day.
+- Trainers, historical member assignments, reusable exercises and ordered workout-plan exercises.
+- SQL-aggregate dashboard metrics, filtered business reports and UTF-8 CSV exports.
+- Responsive server-rendered administration UI, production Docker image and PostgreSQL CI.
 
-Python 3.13 is used by the existing Dockerfile. Development checks in the
-implementation environment ran on Python 3.12.14.
+Online payments, member accounts, multi-branch tenancy, biometrics, messaging and AI are intentionally outside this MVP.
 
-```bash
-python -m pip install -r requirements-dev.txt
+## Architecture
+
+The application is a modular monolith:
+
+```text
+Browser / API client -> FastAPI routes -> services -> repositories -> SQLAlchemy -> PostgreSQL
 ```
 
-Use `.env.example` as a reference. **Keep your existing `.env`** when applying
-this update. It must contain `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`,
-`POSTGRES_HOST`, `POSTGRES_PORT`, `SECRET_KEY` and `ENVIRONMENT`.
+- `app/api/routes`: HTTP, form parsing, rendering and response semantics.
+- `app/services`: business rules and transaction coordination.
+- `app/repositories`: database queries, filters, pagination and aggregates.
+- `app/models`: normalized persistence schema and constraints.
+- `app/schemas`: Pydantic input validation.
+- `app/templates` and `app/static`: Jinja2/Bootstrap UI.
+- `alembic/versions`: reviewed schema history; production never uses `create_all()`.
+- `tests`: unit, API, security and migration coverage.
 
-The new Compose file reads credentials from `.env`. For an existing database
-volume, use that database's CURRENT username/password/database name. Changing
-`POSTGRES_PASSWORD` in Compose does not change the password inside an already
-initialized PostgreSQL volume. Do not delete volumes to resolve a mismatch.
+See [architecture](docs/architecture.md), [security](docs/security.md),
+[testing](docs/testing.md) and [AWS deployment preparation](docs/aws-deployment.md).
 
-Generate a fresh session secret directly into your existing local `.env`
-without printing it (run once; this invalidates all earlier signed cookies):
+## Roles and permissions
+
+- **Admin:** all operations, staff accounts and settings.
+- **Receptionist:** members, memberships, subscriptions, payments, attendance and basic read access.
+- **Trainer:** assigned-member visibility, attendance and workout management; no financial access.
+- **Owner:** read-oriented dashboard, operations and reports access.
+
+Backend dependencies enforce every permission. Hiding navigation items is only a UX convenience.
+The built-in permission matrix is defined in `app/core/permissions.py` and synchronized by the bootstrap command.
+
+## Environment
+
+Copy `.env.example` to an ignored `.env` and fill the values. Never commit `.env`.
+
+| Variable | Purpose |
+| --- | --- |
+| `APP_NAME` | Display/application name |
+| `ENVIRONMENT` | `development`, `test`, or `production` |
+| `SECRET_KEY` | Random value of at least 32 characters used to sign session cookies |
+| `POSTGRES_*` | PostgreSQL connection components |
+| `GYM_TIMEZONE` | IANA gym timezone; defaults to `Africa/Cairo` |
+| `SESSION_MAX_AGE` | Absolute session lifetime in seconds, 300–86400 |
+| `COOKIE_SECURE` | Override secure-cookie behavior; production should be `true` |
+| `ALLOWED_HOSTS` | Comma-separated hostnames accepted by the application |
+
+Generate a development secret without printing it:
 
 ```bash
 python -c 'from dotenv import set_key; import secrets; set_key(".env", "SECRET_KEY", secrets.token_urlsafe(48))'
 ```
 
-No `.env` is included in the delivered archive. Environment secrets belong only
-in your local ignored environment file or a deployment secret store. Admin
-passwords are entered only through `getpass`, never in `.env` or CLI arguments.
+Production secrets belong in AWS Secrets Manager or SSM Parameter Store, not an image, repository or task definition.
 
-`ENVIRONMENT=development` allows local HTTP. `ENVIRONMENT=production` forces
-Secure cookies; serve the application over HTTPS. Unknown environment values
-and weak/placeholder session secrets fail validation. Keep proxy/access logs
-free of request bodies and cookie/header values.
+## Local Python setup
 
-## Docker startup and database migration
-
-Run from the ORIGINAL project folder after copying in the updated source, so
-Compose continues to use the existing project name and `postgres_data` volume.
-The database container is healthy before the web container starts.
+Python 3.12+ is supported; the containers use Python 3.13.
 
 ```bash
-docker compose build web
-docker compose up -d
-docker compose exec web alembic upgrade head
-docker compose exec web alembic current
-docker compose exec web alembic check
-docker compose exec web python -m scripts.bootstrap_auth --seed-only
-docker compose exec web python -m scripts.bootstrap_auth
-```
-
-The last command asks for username, email and a password of 12–1024 characters,
-with hidden confirmation. Do not send that password in chat. Re-running bootstrap
-synchronizes built-in RBAC and leaves an existing Admin unchanged. It never
-promotes an existing non-admin account or resets an existing password.
-
-The seed owns the seven built-in grants on the four built-in roles; changing
-these grants in the database is reversed on the next bootstrap. Custom roles
-and custom permission codes are preserved. PostgreSQL advisory locking and
-uniqueness constraints protect concurrent first-admin bootstraps.
-
-Local execution without Docker uses `POSTGRES_HOST=localhost`:
-
-```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
 alembic upgrade head
+python -m scripts.bootstrap_auth --seed-only
 python -m scripts.bootstrap_auth
 uvicorn app.main:app --reload
 ```
 
-## API and CSRF flow
+On Windows PowerShell activate with `.venv\Scripts\Activate.ps1`. The admin command requests the password through hidden terminal input. It never accepts it as a command-line argument.
 
-| Method | Path | Request | Success |
-| --- | --- | --- | --- |
-| GET | `/auth/csrf` | Browser's cookie jar | `200 {"csrf_token": "..."}` |
-| POST | `/auth/login` | JSON `username`, `password`; `X-CSRF-Token` header | 200 safe user fields |
-| GET | `/auth/me` | Session cookie | 200 safe user fields |
-| POST | `/auth/logout` | Cookie and current `X-CSRF-Token` | 204, revokes session |
+Open `http://localhost:8000/login`. Development API documentation is at `/docs`; it is disabled in production.
 
-1. GET `/auth/csrf` and retain the `gym_session` cookie.
-2. POST `/auth/login` with that cookie and the returned token in `X-CSRF-Token`.
-3. Login rotates both the session token and CSRF token. GET `/auth/csrf` again
-   before the next state-changing request.
-4. GET `/auth/me` with the cookie to identify the current user.
-5. POST `/auth/logout` with the current CSRF token, then `/auth/me` returns 401.
-
-Browser fetch calls use `credentials: "same-origin"`. Keep the frontend and API
-on the same origin for this MVP; cross-origin credentials/CORS were not enabled.
-Swagger can exercise these JSON routes: first get the token, then explicitly
-supply the `X-CSRF-Token` header using a client that allows it. The secure manual
-verification script below is simpler and handles the cookie/token flow for you.
-
-Invalid credentials, including inactive accounts, return exactly
-`401 {"detail": "Invalid username or password"}`. Missing/invalid authentication
-is 401; an authenticated user without permission is 403. Missing/invalid CSRF is
-403. Invalid request shape is 422 with input values removed from error output.
-Authentication responses use `Cache-Control: no-store`.
-
-## Authentication and sessions
-
-Argon2id hashes passwords with independently generated salts. The service runs
-a dummy Argon2 verification for unknown usernames to reduce timing differences.
-Username and email are stored lowercase; database checks and unique indexes
-prevent case variants from creating separate identities. Username login trims
-whitespace and ignores case. There is no public user-creation endpoint.
-
-Starlette SessionMiddleware signs the cookie; it does NOT encrypt it or itself
-provide server-side revocation. The cookie contains only `user_id`, an opaque
-`session_token`, and `csrf_token`. Never put roles, permissions or password
-information in that cookie.
-
-The additional `auth_sessions` table stores only the SHA-256 digest of the random
-session token, user reference and timestamps. The server verifies that record,
-its absolute eight-hour expiry, the user's existence and active flag on every
-protected request. Cookie renewal cannot extend the database expiry. Logout
-removes the record, so replaying the old signed cookie does not log back in.
-Re-login revokes the previous browser session and creates a fresh one.
-
-When an inactive user is observed, all their session records are revoked. Future
-account-deactivation/password-reset services should revoke all sessions in the
-same transaction as the account change. Expired rows are cleaned on successful
-login. No automatic admin creation or database migration runs at app startup.
-
-Cookies use `HttpOnly`, `SameSite=Lax`, a host-only scope, `/` path and a maximum
-age of 28,800 seconds; production adds `Secure`. CSRF uses cryptographic random
-tokens and constant-time comparison, including protection on login and logout.
-
-## Permission matrix
-
-The source of truth for built-in grants is `app/core/permissions.py`.
-Owner is intentionally a read-only business role in this initial matrix.
-
-| Permission | Admin | Receptionist | Trainer | Owner |
-| --- | --- | --- | --- | --- |
-| members.read | Yes | Yes | Yes | Yes |
-| members.write | Yes | Yes | No | No |
-| payments.read | Yes | Yes | No | Yes |
-| payments.write | Yes | Yes | No | No |
-| attendance.record | Yes | Yes | Yes | No |
-| users.manage | Yes | No | No | No |
-| reports.read | Yes | No | No | Yes |
-
-Future routes should declare permission dependencies and, for state changes,
-CSRF dependencies. Example (illustration only, not a new business endpoint):
-
-```python
-@router.post(
-    "/attendance",
-    dependencies=[
-        Depends(require_permission("attendance.record")),
-        Depends(validate_csrf_token),
-    ],
-)
-def record_attendance(...):
-    ...
-```
-
-User -> Role -> Permissions are loaded from the database using `selectinload`.
-Database changes take effect on the next request. Test-only protected routes
-exist solely in the test suite; they are not registered by `app.main`.
-
-## Tests and manual verification
+## Docker development
 
 ```bash
-python -m pytest -q
-python -m scripts.verify_auth
+docker compose build
+docker compose up -d
+docker compose exec web alembic upgrade head
+docker compose exec web python -m scripts.bootstrap_auth --seed-only
+docker compose exec web python -m scripts.bootstrap_auth
+docker compose logs -f web
+docker compose exec web python -m pytest -q
+docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose down
 ```
 
-The second command talks to `http://localhost:8000`, asks securely for credentials,
-and checks CSRF, login, `/auth/me`, logout and wrong-password behavior without
-writing cookies or credentials to files.
+`docker compose down -v` permanently removes the local PostgreSQL volume. Do not use `-v` unless deleting local data is intentional.
 
-Default automated tests use a fresh migrated in-memory SQLite database with
-foreign keys enabled. To run the same suite against PostgreSQL using your local
-`.env` credentials, use Git Bash:
+## Migrations
+
+```bash
+alembic current
+alembic heads
+alembic upgrade head
+alembic check
+```
+
+For a new schema change, update the models, generate a revision, inspect every operation, test upgrade/downgrade in an isolated database, and commit model and migration together. Never run destructive migration experiments against production data.
+
+## Testing and linting
+
+```bash
+python -m ruff check app tests scripts alembic
+python -m pytest -q
+```
+
+Default tests use a fresh migrated in-memory SQLite database. Important PostgreSQL integration behavior can be verified in isolated, randomly named schemas:
 
 ```bash
 GYM_TEST_POSTGRES=1 python -m pytest -q
 ```
 
-This opt-in creates and later drops randomly named `phase5_test_...` schemas in
-the configured database. It never uses existing application tables; the database
-role must be allowed to create schemas. Each test has its own schema. Do not set
-`GYM_TEST_POSTGRES` unless that temporary schema creation is intended.
+The configured role must be able to create/drop test schemas. The test fixture never uses existing application tables. CI runs this PostgreSQL mode and builds the production image.
 
-Inspect the real database without printing credential values:
+## Production container
+
+The main `Dockerfile` runs as a non-root user, uses two Uvicorn workers without reload and includes a health check.
 
 ```bash
-docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\dt"'
-docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\d users"'
-docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\d role_permissions"'
-docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT id, username, role_id, is_active FROM users;"'
+docker build -t gym-management-system:latest .
+docker compose -f docker-compose.prod.yml config
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml exec web alembic upgrade head
 ```
 
-## Architecture
+Run migrations as a one-off deployment step before replacing the application tasks. Do not run concurrent automatic migrations from every worker.
 
-- `app/models`: database tables and relationships.
-- `app/repositories`: database reads/writes, no HTTP or authentication decisions.
-- `app/services`: password verification, active-user/session rules and transactions.
-- `app/api/dependencies.py`: current-user resolution and reusable permission checks.
-- `app/api/routes/auth.py`: HTTP input, CSRF dependencies, cookie state and responses.
-- `app/schemas/auth.py`: explicit input and safe output schemas.
-- `app/core`: settings, hashing, CSRF and the central permission matrix.
-- `scripts`: explicit secure bootstrap and manual API verification.
+## Security and operations
 
-References: [pwdlib API](https://frankie567.github.io/pwdlib/reference/pwdlib/),
-[SQLAlchemy relationship loading](https://docs.sqlalchemy.org/en/20/orm/queryguide/relationships.html).
+- Production cookies are `HttpOnly`, `Secure` and `SameSite=Lax`; sessions have server-side revocation records.
+- Every state-changing browser/API request requires a server-validated CSRF token.
+- Trusted-host validation, content/type/frame/referrer/permissions policies and production HSTS are enabled.
+- Validation errors omit submitted values, and secrets are hidden from SQLAlchemy diagnostics.
+- Members, users, plans and trainers are deactivated rather than hard-deleted; financial history is immutable in the MVP.
+- Back up RDS automatically, enable deletion protection and test restore procedures before launch.
+
+## AWS deployment preparation
+
+The recommended MVP architecture is ALB + ECS Fargate + RDS PostgreSQL, with images in ECR, TLS from ACM, DNS in Route 53, logs in CloudWatch and runtime secrets from Secrets Manager. No Kubernetes is required.
+
+Follow [docs/aws-deployment.md](docs/aws-deployment.md) for the exact checklist, networking, IAM, migration, backup and rollback procedures.
+
+**No AWS resources are created by this repository and no AWS deployment has been performed.**
