@@ -1,0 +1,21 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      APP_NAME: ${APP_NAME:-Gym Management System}
+      ENVIRONMENT: production
+      SECRET_KEY: ${SECRET_KEY:?Provide SECRET_KEY from a secret manager}
+      POSTGRES_USER: ${POSTGRES_USER:?Provide POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Provide POSTGRES_PASSWORD from a secret manager}
+      POSTGRES_DB: ${POSTGRES_DB:?Provide POSTGRES_DB}
+      POSTGRES_HOST: ${POSTGRES_HOST:?Provide the RDS endpoint}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      GYM_TIMEZONE: ${GYM_TIMEZONE:-Africa/Cairo}
+      SESSION_MAX_AGE: ${SESSION_MAX_AGE:-28800}
+      COOKIE_SECURE: "true"
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?Provide the public application hostname}

@@ -1,7 +1,12 @@
-.venv
 .git
+.github
 .env
+.venv
 __pycache__
-*.pyc
-.pytest_cache*.zip
+*.py[cod]
+.pytest_cache
+.ruff_cache
+htmlcov
+.coverage
+*.zip
 *.bundle

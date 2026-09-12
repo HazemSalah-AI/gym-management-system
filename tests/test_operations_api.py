@@ -87,6 +87,8 @@ def test_web_pages_render_and_report_csv_is_authorized(client, login):
         response = client.get(path)
         assert response.status_code == 200, path
         assert "Gym Management" in response.text
+        assert response.headers["x-frame-options"] == "DENY"
+        assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
     report = client.get("/reports/active-members.csv")
     assert report.status_code == 200 and "text/csv" in report.headers["content-type"]
 

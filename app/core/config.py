@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     gym_timezone: str = "Africa/Cairo"
     session_max_age: int = 28_800
     cookie_secure: bool | None = None
+    allowed_hosts: str = "localhost,127.0.0.1,testserver"
 
     @property
     def database_url(self) -> URL:
@@ -34,6 +35,11 @@ class Settings(BaseSettings):
     @property
     def session_https_only(self) -> bool:
         return self.cookie_secure if self.cookie_secure is not None else self.environment == "production"
+
+    @property
+    def allowed_host_list(self) -> list[str]:
+        hosts = [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]
+        return hosts or ["localhost"]
 
     @field_validator("gym_timezone")
     @classmethod

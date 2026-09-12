@@ -1,4 +1,4 @@
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -37,6 +37,6 @@ class UserAdminService:
             raise Conflict("You cannot deactivate your own account")
         user.is_active = active
         if not active:
-            self.db.query(AuthSession).filter(AuthSession.user_id == user.id).delete()
+            self.db.execute(delete(AuthSession).where(AuthSession.user_id == user.id))
         self.db.commit()
         return user

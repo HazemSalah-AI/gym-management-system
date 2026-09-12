@@ -1,5 +1,10 @@
 .venv/
 .env
 __pycache__/
-*.pyc
-.pytest_cache/*.bundle
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.sqlite3
+*.bundle

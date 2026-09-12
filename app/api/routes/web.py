@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 from datetime import date
 from decimal import Decimal
 
@@ -35,6 +36,7 @@ from app.services.users import UserAdminService
 
 router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory="app/templates")
+logger = logging.getLogger(__name__)
 
 
 def has_permission(user: User, code: str) -> bool:
@@ -80,6 +82,7 @@ def login_form(
     try:
         user, token = AuthService(db).login(username, password, previous if isinstance(previous, str) else None)
     except InvalidCredentials:
+        logger.warning("Browser authentication failed")
         return templates.TemplateResponse(
             request, "login.html", context(request, error="Invalid username or password"), status_code=401
         )

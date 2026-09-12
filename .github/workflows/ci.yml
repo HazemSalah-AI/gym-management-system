@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "work/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: gym_ci
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: gym_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gym_ci -d gym_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: ci-only-generated-placeholder-key-32-characters-long
+      POSTGRES_USER: gym_ci
+      POSTGRES_PASSWORD: ci-only-password
+      POSTGRES_DB: gym_ci
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      GYM_TEST_POSTGRES: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m ruff check app tests scripts alembic
+      - run: python -m pytest -q
+      - run: python -c "from app.main import app; assert app.title"
+      - run: alembic upgrade head
+      - run: alembic check
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag gym-management-system:ci .

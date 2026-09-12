@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
@@ -9,6 +11,7 @@ from app.schemas.auth import CsrfResponse, LoginRequest, UserResponse
 from app.services.auth import AuthService, InvalidCredentials
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/csrf", response_model=CsrfResponse)
@@ -26,6 +29,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             previous_token if isinstance(previous_token, str) else None,
         )
     except InvalidCredentials:
+        logger.warning("Authentication failed")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid username or password") from None
     request.session.clear()
     request.session["user_id"] = user.id
