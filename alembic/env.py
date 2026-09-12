@@ -6,6 +6,7 @@ from sqlalchemy.engine import create_engine
 
 from app.core.config import settings
 from app.db.base import Base
+import app.models  # noqa: F401 -- register all models with Base.metadata
 
 
 config = context.config
@@ -30,21 +31,30 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def migrate_connection(connection) -> None:
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,
+    )
+    with context.begin_transaction():
+        context.run_migrations()
+
+
 def run_migrations_online() -> None:
+    # Supports isolated migration tests without changing production settings.
+    provided_connection = config.attributes.get("connection")
+    if provided_connection is not None:
+        migrate_connection(provided_connection)
+        return
     connectable = create_engine(
         settings.database_url,
         poolclass=pool.NullPool,
+        hide_parameters=True,
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            compare_type=True,
-        )
-
-        with context.begin_transaction():
-            context.run_migrations()
+        migrate_connection(connection)
 
 
 if context.is_offline_mode():
