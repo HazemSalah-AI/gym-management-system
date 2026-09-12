@@ -1,31 +1,50 @@
+from typing import Literal
+
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import URL
 
 
 class Settings(BaseSettings):
     app_name: str = "Gym Management System"
-    environment: str = "development"
-    secret_key: str
+    environment: Literal["development", "test", "production"] = "development"
+    secret_key: SecretStr
 
     postgres_user: str
-    postgres_password: str
+    postgres_password: SecretStr
     postgres_db: str
     postgres_host: str = "localhost"
     postgres_port: int = 5432
 
     @property
-    def database_url(self) -> str:
-        return (
-            f"postgresql+psycopg://"
-            f"{self.postgres_user}:"
-            f"{self.postgres_password}@"
-            f"{self.postgres_host}:"
-            f"{self.postgres_port}/"
-            f"{self.postgres_db}"
+    def database_url(self) -> URL:
+        return URL.create(
+            "postgresql+psycopg",
+            username=self.postgres_user,
+            password=self.postgres_password.get_secret_value(),
+            host=self.postgres_host,
+            port=self.postgres_port,
+            database=self.postgres_db,
         )
+
+    @property
+    def session_https_only(self) -> bool:
+        return self.environment == "production"
+
+    @field_validator("secret_key")
+    @classmethod
+    def validate_secret(cls, value: SecretStr) -> SecretStr:
+        raw = value.get_secret_value()
+        if len(raw) < 32 or len(set(raw)) < 8 or any(
+            word in raw.lower() for word in ("change-this", "your-secret", "replace-me")
+        ):
+            raise ValueError("SECRET_KEY must be a generated random secret of at least 32 characters")
+        return value
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        hide_input_in_errors=True,
     )
 
 
