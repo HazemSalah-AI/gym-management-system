@@ -4,6 +4,7 @@ Default: SQLite with foreign keys enabled.
 GYM_TEST_POSTGRES=1: use .env PostgreSQL credentials, but create/drop only a
 random test schema. The connection role needs CREATE permission on the database.
 """
+
 import os
 import secrets
 
@@ -11,12 +12,13 @@ USE_POSTGRES = os.environ.get("GYM_TEST_POSTGRES") == "1"
 os.environ.setdefault("SECRET_KEY", secrets.token_urlsafe(48))
 if not USE_POSTGRES:
     os.environ.update(
-        ENVIRONMENT="test", POSTGRES_USER="phase5_test",
-        POSTGRES_PASSWORD=secrets.token_urlsafe(24), POSTGRES_DB="phase5_test",
+        ENVIRONMENT="test",
+        POSTGRES_USER="phase5_test",
+        POSTGRES_PASSWORD=secrets.token_urlsafe(24),
+        POSTGRES_DB="phase5_test",
     )
 
 import pytest
-from alembic import command
 from alembic.config import Config
 from fastapi import Depends
 from fastapi.testclient import TestClient
@@ -24,6 +26,7 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from alembic import command
 from app.api.dependencies import require_permission
 from app.core.config import settings
 from app.core.csrf import validate_csrf_token
@@ -31,8 +34,8 @@ from app.core.security import hash_password
 from app.db.session import get_db
 from app.main import app
 from app.models import User
-from app.services.bootstrap import seed_auth
 from app.repositories.bootstrap import BootstrapRepository
+from app.services.bootstrap import seed_auth
 
 
 # Test-only probes. These are never registered by production app imports.
@@ -41,9 +44,13 @@ def protected_users():
     return {"allowed": True}
 
 
-@app.post("/_test/attendance", dependencies=[
-    Depends(require_permission("attendance.record")), Depends(validate_csrf_token),
-])
+@app.post(
+    "/_test/attendance",
+    dependencies=[
+        Depends(require_permission("attendance.record")),
+        Depends(validate_csrf_token),
+    ],
+)
 def protected_attendance():
     return {"recorded": True}
 
@@ -67,8 +74,10 @@ def engine():
             connection.autocommit = original
     else:
         db_engine = create_engine(
-            "sqlite://", connect_args={"check_same_thread": False},
-            poolclass=StaticPool, hide_parameters=True,
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+            hide_parameters=True,
         )
 
         @event.listens_for(db_engine, "connect")
@@ -108,8 +117,7 @@ def users(db, credential):
     roles = BootstrapRepository(db).roles()
     ids = {}
     for name, role in roles.items():
-        user = User(username=name.lower(), email=f"{name.lower()}@example.com",
-                    password_hash=credential[1], role=role)
+        user = User(username=name.lower(), email=f"{name.lower()}@example.com", password_hash=credential[1], role=role)
         db.add(user)
         db.flush()
         ids[name] = user.id
@@ -122,6 +130,7 @@ def client(engine):
     def override_db():
         with Session(engine) as session:
             yield session
+
     app.dependency_overrides[get_db] = override_db
     with TestClient(app, base_url="https://testserver") as test_client:
         yield test_client
@@ -132,6 +141,8 @@ def client(engine):
 def login(client, users, credential):
     def perform(username="admin"):
         csrf = client.get("/auth/csrf").json()["csrf_token"]
-        return client.post("/auth/login", json={"username": username, "password": credential[0]},
-                           headers={"X-CSRF-Token": csrf})
+        return client.post(
+            "/auth/login", json={"username": username, "password": credential[0]}, headers={"X-CSRF-Token": csrf}
+        )
+
     return perform

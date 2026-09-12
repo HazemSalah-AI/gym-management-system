@@ -104,6 +104,15 @@ class DomainService:
         self._commit()
         return plan
 
+    def update_plan(self, plan_id: int, values: PlanInput) -> MembershipPlan:
+        plan = self.db.get(MembershipPlan, plan_id)
+        if not plan:
+            raise NotFound("Membership plan not found")
+        for key, value in values.model_dump().items():
+            setattr(plan, key, value)
+        self._commit()
+        return plan
+
     def set_plan_active(self, plan_id: int, active: bool) -> MembershipPlan:
         plan = self.db.get(MembershipPlan, plan_id)
         if not plan:
@@ -239,6 +248,17 @@ class DomainService:
             raise NotFound("Member or trainer not found")
         row = WorkoutPlan(**values.model_dump())
         self.db.add(row)
+        self._commit()
+        return row
+
+    def update_workout(self, workout_id: int, values: WorkoutInput) -> WorkoutPlan:
+        row = self.db.get(WorkoutPlan, workout_id)
+        if not row:
+            raise NotFound("Workout plan not found")
+        if values.end_date and values.end_date < values.start_date:
+            raise Conflict("Workout end date cannot precede its start date")
+        for key, value in values.model_dump().items():
+            setattr(row, key, value)
         self._commit()
         return row
 

@@ -49,7 +49,9 @@ def test_first_admin_hashed_normalized_and_not_overwritten(db, credential):
     assert verify_password(credential[0], user.password_hash)
     original_hash = user.password_hash
     with pytest.raises(BootstrapConflict):
-        create_first_admin(db, AdminInput(username="other", email="other@example.com", password=secrets.token_urlsafe(24)))
+        create_first_admin(
+            db, AdminInput(username="other", email="other@example.com", password=secrets.token_urlsafe(24))
+        )
     db.refresh(user)
     assert user.password_hash == original_hash
     assert db.scalar(select(func.count()).select_from(User)) == 1
@@ -98,8 +100,10 @@ def test_cli_aborts_if_password_would_echo(engine, db, monkeypatch, capsys):
     monkeypatch.setattr(bootstrap_auth, "SessionLocal", sessionmaker(engine))
     fields = iter(["hazem", "hazem@example.com"])
     monkeypatch.setattr("builtins.input", lambda prompt: next(fields))
+
     def insecure_getpass(prompt):
         warnings.warn("No secure terminal", getpass.GetPassWarning)
+
     monkeypatch.setattr(getpass, "getpass", insecure_getpass)
     assert bootstrap_auth.main([]) == 1
     assert db.scalar(select(func.count()).select_from(User)) == 0
@@ -108,8 +112,12 @@ def test_cli_aborts_if_password_would_echo(engine, db, monkeypatch, capsys):
 
 @pytest.mark.parametrize("field", ["username", "email"])
 def test_duplicate_identities_enforced_by_database(db, users, credential, field):
-    kwargs = {"username": "newuser", "email": "newuser@example.com", "password_hash": credential[1],
-              "role_id": db.get(User, users["Admin"]).role_id}
+    kwargs = {
+        "username": "newuser",
+        "email": "newuser@example.com",
+        "password_hash": credential[1],
+        "role_id": db.get(User, users["Admin"]).role_id,
+    }
     kwargs[field] = "admin" if field == "username" else "admin@example.com"
     db.add(User(**kwargs))
     with pytest.raises(IntegrityError):

@@ -22,13 +22,16 @@ from app.schemas.domain import (
     MemberInput,
     PaymentInput,
     PlanInput,
+    StaffUserInput,
     SubscriptionInput,
     TrainerInput,
+    WorkoutExerciseInput,
     WorkoutInput,
 )
 from app.services.auth import AuthService, InvalidCredentials
 from app.services.domain import Conflict, DomainService, NotFound
 from app.services.reporting import ReportingService
+from app.services.users import UserAdminService
 
 router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory="app/templates")
@@ -584,6 +587,40 @@ def workout_create(
     return RedirectResponse("/workouts", 303)
 
 
+@router.post("/workouts/{workout_id}/exercises")
+def workout_exercise_create(
+    workout_id: int,
+    request: Request,
+    csrf_token: str = Form(...),
+    exercise_id: int = Form(...),
+    position: int = Form(...),
+    sets: int = Form(...),
+    reps: int = Form(...),
+    weight: Decimal | None = Form(None),
+    rest_seconds: int | None = Form(None),
+    notes: str = Form(""),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("workouts.write")),
+):
+    validate_csrf_value(request, csrf_token)
+    try:
+        DomainService(db).add_workout_exercise(
+            workout_id,
+            WorkoutExerciseInput(
+                exercise_id=exercise_id,
+                position=position,
+                sets=sets,
+                reps=reps,
+                weight=weight,
+                rest_seconds=rest_seconds,
+                notes=notes or None,
+            ),
+        )
+    except (ValidationError, Conflict, NotFound) as exc:
+        raise HTTPException(409, form_error(exc)) from exc
+    return RedirectResponse("/workouts", 303)
+
+
 @router.get("/reports", response_class=HTMLResponse)
 def reports(
     request: Request,
@@ -630,6 +667,49 @@ def users_page(
 ):
     users = list(db.scalars(select(User).options(selectinload(User.role)).order_by(User.username)))
     return templates.TemplateResponse(request, "users.html", context(request, user, title="Users", users=users))
+
+
+@router.post("/users")
+def user_create(
+    request: Request,
+    csrf_token: str = Form(...),
+    username: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    role_name: str = Form(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("users.manage")),
+):
+    validate_csrf_value(request, csrf_token)
+    try:
+        UserAdminService(db).create(
+            StaffUserInput(
+                username=username,
+                email=email,
+                password=password,
+                role_name=role_name,
+            )
+        )
+    except (ValidationError, Conflict, NotFound) as exc:
+        raise HTTPException(409, form_error(exc)) from exc
+    return RedirectResponse("/users", 303)
+
+
+@router.post("/users/{user_id}/status")
+def user_toggle(
+    user_id: int,
+    request: Request,
+    csrf_token: str = Form(...),
+    active: bool = Form(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("users.manage")),
+):
+    validate_csrf_value(request, csrf_token)
+    try:
+        UserAdminService(db).set_active(user_id, active, user.id)
+    except (Conflict, NotFound) as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return RedirectResponse("/users", 303)
 
 
 @router.get("/settings", response_class=HTMLResponse)

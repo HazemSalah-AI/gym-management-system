@@ -52,6 +52,18 @@ class PlanInput(BaseModel):
     description: str | None = Field(default=None, max_length=4000)
 
 
+class StaffUserInput(BaseModel):
+    username: str = Field(min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_.-]+$")
+    email: EmailStr
+    password: str = Field(min_length=12, max_length=1024)
+    role_name: str = Field(pattern=r"^(Admin|Receptionist|Trainer|Owner)$")
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        return value.strip().lower()
+
+
 class SubscriptionInput(BaseModel):
     member_id: int = Field(gt=0)
     plan_id: int = Field(gt=0)

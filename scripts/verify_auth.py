@@ -1,4 +1,5 @@
 """Manual API smoke test with hidden password input and an in-memory cookie jar."""
+
 import argparse
 import getpass
 import secrets
@@ -25,6 +26,7 @@ def main() -> int:
         # Local development traffic must not go through an ambient remote proxy.
         use_proxy_environment = parsed.hostname not in {"localhost", "127.0.0.1", "::1"}
         with httpx.Client(base_url=args.base_url, timeout=15, trust_env=use_proxy_environment) as client:
+
             def expect(response: httpx.Response, status: int, label: str):
                 if response.status_code != status:
                     raise RuntimeError(f"{label}: expected {status}, got {response.status_code}")
@@ -33,8 +35,9 @@ def main() -> int:
             response = client.get("/auth/csrf")
             expect(response, 200, "CSRF token")
             csrf = response.json()["csrf_token"]
-            response = client.post("/auth/login", json={"username": username, "password": password},
-                                   headers={"X-CSRF-Token": csrf})
+            response = client.post(
+                "/auth/login", json={"username": username, "password": password}, headers={"X-CSRF-Token": csrf}
+            )
             expect(response, 200, "Login")
             response = client.get("/auth/me")
             expect(response, 200, "Current user")
@@ -44,8 +47,11 @@ def main() -> int:
             expect(client.post("/auth/logout", headers={"X-CSRF-Token": csrf}), 204, "Logout")
             expect(client.get("/auth/me"), 401, "No session")
             csrf = client.get("/auth/csrf").json()["csrf_token"]
-            response = client.post("/auth/login", json={"username": username, "password": secrets.token_urlsafe(48)},
-                                   headers={"X-CSRF-Token": csrf})
+            response = client.post(
+                "/auth/login",
+                json={"username": username, "password": secrets.token_urlsafe(48)},
+                headers={"X-CSRF-Token": csrf},
+            )
             expect(response, 401, "Wrong password")
             if response.json() != {"detail": "Invalid username or password"}:
                 raise RuntimeError("Unexpected invalid-credentials response")

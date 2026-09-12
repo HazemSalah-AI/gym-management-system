@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.dependencies import require_permission
 from app.core.csrf import validate_csrf_token
 from app.db.session import get_db
-from app.models import Exercise, Member, MembershipPlan, Subscription, WorkoutPlan
+from app.models import Exercise, Member, MembershipPlan, Subscription, Trainer, WorkoutPlan
 from app.repositories.domain import DomainRepository
 from app.schemas.domain import (
     AssignmentInput,
@@ -16,12 +16,14 @@ from app.schemas.domain import (
     MemberInput,
     PaymentInput,
     PlanInput,
+    StaffUserInput,
     SubscriptionInput,
     TrainerInput,
     WorkoutExerciseInput,
     WorkoutInput,
 )
 from app.services.domain import Conflict, DomainService, NotFound
+from app.services.users import UserAdminService
 
 router = APIRouter(prefix="/api", tags=["Gym operations"])
 csrf = Depends(validate_csrf_token)
@@ -136,6 +138,24 @@ def create_plan(values: PlanInput, db: Session = Depends(get_db), user=current("
         service_error(exc)
 
 
+@router.put("/membership-plans/{plan_id}", dependencies=[csrf])
+def update_plan(plan_id: int, values: PlanInput, db: Session = Depends(get_db), user=current("memberships.write")):
+    try:
+        row = DomainService(db).update_plan(plan_id, values)
+        return {"id": row.id, "name": row.name, "duration_months": row.duration_months, "price": row.price}
+    except (Conflict, NotFound) as exc:
+        service_error(exc)
+
+
+@router.post("/membership-plans/{plan_id}/status", dependencies=[csrf])
+def plan_status(plan_id: int, active: bool, db: Session = Depends(get_db), user=current("memberships.write")):
+    try:
+        row = DomainService(db).set_plan_active(plan_id, active)
+        return {"id": row.id, "is_active": row.is_active}
+    except (Conflict, NotFound) as exc:
+        service_error(exc)
+
+
 @router.post("/subscriptions", status_code=201, dependencies=[csrf])
 def create_subscription(values: SubscriptionInput, db: Session = Depends(get_db), user=current("subscriptions.write")):
     try:
@@ -217,6 +237,31 @@ def record_payment(values: PaymentInput, db: Session = Depends(get_db), user=cur
         }
     except (Conflict, NotFound) as exc:
         service_error(exc)
+
+
+@router.get("/payments/{payment_id}")
+def payment_detail(payment_id: int, db: Session = Depends(get_db), user=current("payments.read")):
+    from app.models import Payment
+
+    row = db.scalar(
+        select(Payment)
+        .options(selectinload(Payment.member), selectinload(Payment.subscription))
+        .where(Payment.id == payment_id)
+    )
+    if not row:
+        raise HTTPException(404, "Payment not found")
+    return {
+        "id": row.id,
+        "member_id": row.member_id,
+        "member_name": row.member.full_name,
+        "subscription_id": row.subscription_id,
+        "amount": row.amount,
+        "method": row.method,
+        "paid_at": row.paid_at,
+        "reference_number": row.reference_number,
+        "notes": row.notes,
+        "recorded_by_user_id": row.recorded_by_user_id,
+    }
 
 
 @router.get("/attendance")
@@ -302,6 +347,67 @@ def create_trainer(values: TrainerInput, db: Session = Depends(get_db), user=cur
         service_error(exc)
 
 
+@router.get("/trainers/{trainer_id}")
+def trainer_detail(trainer_id: int, db: Session = Depends(get_db), user=current("trainers.read")):
+    from app.models import TrainerAssignment
+
+    row = db.get(Trainer, trainer_id)
+    if not row:
+        raise HTTPException(404, "Trainer not found")
+    assignments = db.scalars(
+        select(TrainerAssignment)
+        .options(selectinload(TrainerAssignment.member))
+        .where(TrainerAssignment.trainer_id == trainer_id)
+        .order_by(TrainerAssignment.id.desc())
+    )
+    return {
+        "id": row.id,
+        "full_name": row.full_name,
+        "phone": row.phone,
+        "email": row.email,
+        "specialization": row.specialization,
+        "notes": row.notes,
+        "status": row.status,
+        "assignments": [
+            {
+                "member_id": a.member_id,
+                "member_name": a.member.full_name,
+                "start_date": a.start_date,
+                "end_date": a.end_date,
+                "is_active": a.is_active,
+            }
+            for a in assignments
+        ],
+    }
+
+
+@router.put("/trainers/{trainer_id}", dependencies=[csrf])
+def update_trainer(
+    trainer_id: int, values: TrainerInput, db: Session = Depends(get_db), user=current("trainers.write")
+):
+    try:
+        row = DomainService(db).update_trainer(trainer_id, values)
+        return {
+            "id": row.id,
+            "full_name": row.full_name,
+            "phone": row.phone,
+            "email": row.email,
+            "specialization": row.specialization,
+            "status": row.status,
+        }
+    except (Conflict, NotFound) as exc:
+        service_error(exc)
+
+
+@router.post("/trainers/{trainer_id}/status", dependencies=[csrf])
+def trainer_status(trainer_id: int, active: bool, db: Session = Depends(get_db), user=current("trainers.write")):
+    try:
+        row = DomainService(db).set_trainer_active(trainer_id, active)
+        return {"id": row.id, "status": row.status}
+    except (Conflict, NotFound) as exc:
+        service_error(exc)
+
+
 @router.post("/trainer-assignments", status_code=201, dependencies=[csrf])
 def assign_trainer(values: AssignmentInput, db: Session = Depends(get_db), user=current("trainers.write")):
     try:
@@ -360,6 +466,39 @@ def workouts(db: Session = Depends(get_db), user=current("workouts.read")):
     ]
 
 
+@router.get("/workouts/{workout_id}")
+def workout_detail(workout_id: int, db: Session = Depends(get_db), user=current("workouts.read")):
+    row = DomainRepository(db).workout(workout_id)
+    if not row:
+        raise HTTPException(404, "Workout plan not found")
+    return {
+        "id": row.id,
+        "name": row.name,
+        "member_id": row.member_id,
+        "member_name": row.member.full_name,
+        "trainer_id": row.trainer_id,
+        "trainer_name": row.trainer.full_name,
+        "start_date": row.start_date,
+        "end_date": row.end_date,
+        "notes": row.notes,
+        "status": row.status,
+        "exercises": [
+            {
+                "id": item.id,
+                "exercise_id": item.exercise_id,
+                "name": item.exercise.name,
+                "position": item.position,
+                "sets": item.sets,
+                "reps": item.reps,
+                "weight": item.weight,
+                "rest_seconds": item.rest_seconds,
+                "notes": item.notes,
+            }
+            for item in row.exercises
+        ],
+    }
+
+
 @router.post("/workouts", status_code=201, dependencies=[csrf])
 def create_workout(values: WorkoutInput, db: Session = Depends(get_db), user=current("workouts.write")):
     try:
@@ -393,5 +532,29 @@ def add_exercise(
             "weight": row.weight,
             "rest_seconds": row.rest_seconds,
         }
+    except (Conflict, NotFound) as exc:
+        service_error(exc)
+
+
+@router.post("/users", status_code=201, dependencies=[csrf])
+def create_user(values: StaffUserInput, db: Session = Depends(get_db), user=current("users.manage")):
+    try:
+        row = UserAdminService(db).create(values)
+        return {
+            "id": row.id,
+            "username": row.username,
+            "email": row.email,
+            "role": row.role.name,
+            "is_active": row.is_active,
+        }
+    except (Conflict, NotFound) as exc:
+        service_error(exc)
+
+
+@router.post("/users/{user_id}/status", dependencies=[csrf])
+def user_status(user_id: int, active: bool, db: Session = Depends(get_db), user=current("users.manage")):
+    try:
+        row = UserAdminService(db).set_active(user_id, active, user.id)
+        return {"id": row.id, "is_active": row.is_active}
     except (Conflict, NotFound) as exc:
         service_error(exc)
