@@ -11,11 +11,13 @@ class AuthSessionRepository:
         self.db = db
 
     def get_valid(self, token_hash: str, user_id: int, now: datetime) -> AuthSession | None:
-        return self.db.scalar(select(AuthSession).where(
-            AuthSession.token_hash == token_hash,
-            AuthSession.user_id == user_id,
-            AuthSession.expires_at > now,
-        ))
+        return self.db.scalar(
+            select(AuthSession).where(
+                AuthSession.token_hash == token_hash,
+                AuthSession.user_id == user_id,
+                AuthSession.expires_at > now,
+            )
+        )
 
     def add(self, token_hash: str, user_id: int, expires_at: datetime) -> None:
         self.db.add(AuthSession(token_hash=token_hash, user_id=user_id, expires_at=expires_at))

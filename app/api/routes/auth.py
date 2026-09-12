@@ -8,7 +8,6 @@ from app.models import User
 from app.schemas.auth import CsrfResponse, LoginRequest, UserResponse
 from app.services.auth import AuthService, InvalidCredentials
 
-
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
@@ -22,7 +21,8 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     previous_token = request.session.get("session_token")
     try:
         user, token = AuthService(db).login(
-            payload.username, payload.password.get_secret_value(),
+            payload.username,
+            payload.password.get_secret_value(),
             previous_token if isinstance(previous_token, str) else None,
         )
     except InvalidCredentials:

@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block content %}
+<section class="metric-grid">
+{% for key,label in [('total_members','Total members'),('active_members','Active members'),('expired_memberships','Expired'),('expiring_soon','Expiring soon'),('today_attendance',"Today's attendance"),('today_revenue',"Today's revenue"),('monthly_revenue','Monthly revenue'),('new_members_month','New this month')] %}
+<article class="metric-card"><small>{{ label }}</small><strong>{% if 'revenue' in key %}EGP {% endif %}{{ metrics[key] }}</strong></article>
+{% endfor %}</section>
+<div class="row g-4 mt-1">
+  <div class="col-xl-7"><section class="panel"><h2>Recent payments</h2><div class="table-responsive"><table class="table"><thead><tr><th>Member</th><th>Amount</th><th>Method</th><th>Time</th></tr></thead><tbody>{% for p in recent_payments %}<tr><td>{{ p.member.full_name }}</td><td>EGP {{ p.amount }}</td><td>{{ p.method|replace('_',' ')|title }}</td><td>{{ p.paid_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>{% else %}<tr><td colspan="4" class="empty">No payments yet.</td></tr>{% endfor %}</tbody></table></div></section></div>
+  <div class="col-xl-5"><section class="panel"><h2>Upcoming expirations</h2>{% for s in expirations %}<div class="list-row"><span>{{ s.member.full_name }}<small>{{ s.plan.name }}</small></span><span class="badge text-bg-warning">{{ s.end_date }}</span></div>{% else %}<p class="empty">No memberships expiring this week.</p>{% endfor %}</section></div>
+</div>
+{% endblock %}

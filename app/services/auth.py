@@ -8,7 +8,6 @@ from app.models import User
 from app.repositories.auth_session import AuthSessionRepository
 from app.repositories.user import UserRepository
 
-
 # One real Argon2 check even for unknown accounts; no usable default credential.
 _DUMMY_HASH = hash_password(secrets.token_urlsafe(32))
 

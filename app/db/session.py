@@ -3,7 +3,6 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 
-
 DATABASE_URL = settings.database_url
 
 

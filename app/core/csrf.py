@@ -22,3 +22,15 @@ def validate_csrf_token(request: Request) -> None:
         or not hmac.compare_digest(expected.encode("utf-8"), supplied.encode("utf-8"))
     ):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid or missing CSRF token")
+
+
+def validate_csrf_value(request: Request, supplied: str | None) -> None:
+    """Validate a token submitted by an HTML form."""
+    expected = request.session.get("csrf_token")
+    if (
+        not isinstance(expected, str)
+        or not isinstance(supplied, str)
+        or len(supplied) != 43
+        or not hmac.compare_digest(expected.encode(), supplied.encode())
+    ):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid or missing CSRF token")

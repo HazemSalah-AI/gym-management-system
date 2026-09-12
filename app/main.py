@@ -1,17 +1,17 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api.routes.health import router as health_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.health import router as health_router
+from app.api.routes.operations import router as operations_router
+from app.api.routes.web import router as web_router
 from app.core.config import settings
 from app.core.security import SESSION_MAX_AGE
 
-
-app = FastAPI(
-    title=settings.app_name
-)
+app = FastAPI(title=settings.app_name)
 
 app.add_middleware(
     SessionMiddleware,
@@ -21,6 +21,7 @@ app.add_middleware(
     same_site="lax",
     https_only=settings.session_https_only,
 )
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 
 @app.exception_handler(RequestValidationError)
@@ -35,8 +36,14 @@ async def auth_no_store(request: Request, call_next):
     response = await call_next(request)
     if request.url.path == "/auth" or request.url.path.startswith("/auth/"):
         response.headers["Cache-Control"] = "no-store"
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     return response
 
 
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(operations_router)
+app.include_router(web_router)
