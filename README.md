@@ -14,3 +14,11 @@ Phase 2 completed:
 
 ```bash
 uvicorn app.main:app --reload
+
+
+## Database Migrations
+
+Create a new migration:
+
+```bash
+alembic revision -m "migration message"
